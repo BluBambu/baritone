@@ -32,6 +32,7 @@ import baritone.cache.WorldScanner;
 import baritone.pathing.movement.MovementHelper;
 import baritone.utils.BaritoneProcessHelper;
 import baritone.utils.NotificationHelper;
+import com.sun.org.apache.xerces.internal.util.ShadowedSymbolTable;
 import net.minecraft.block.*;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.item.ItemEntity;
@@ -59,12 +60,12 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
     private int tickCount;
 
     private static final List<Item> FARMLAND_PLANTABLE = Arrays.asList(
-            Items.BEETROOT_SEEDS,
-            Items.MELON_SEEDS,
-            Items.WHEAT_SEEDS,
-            Items.PUMPKIN_SEEDS,
-            Items.POTATO,
-            Items.CARROT
+        Items.BEETROOT_SEEDS,
+        Items.MELON_SEEDS,
+        Items.WHEAT_SEEDS,
+        Items.PUMPKIN_SEEDS,
+        Items.POTATO,
+        Items.CARROT
     );
 
     private static final List<Item> PICKUP_DROPPED = Arrays.asList(
@@ -105,9 +106,8 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
         POTATOES((CropsBlock) Blocks.POTATOES),
         BEETROOT((CropsBlock) Blocks.BEETROOTS),
         PUMPKIN(Blocks.PUMPKIN, state -> true),
-        MELON(Blocks.MELON, state -> true),
-        NETHERWART(Blocks.NETHER_WART, state -> state.get(NetherWartBlock.AGE) >= 3),
-        SUGARCANE(Blocks.SUGAR_CANE, null) {
+        MELON(Blocks.MELON_BLOCK, state -> true),
+        SUGARCANE(Blocks.REEDS, null) {
             @Override
             public boolean readyToHarvest(World world, BlockPos pos, BlockState state) {
                 if (Baritone.settings().replantCrops.value) {
@@ -156,12 +156,8 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
         return FARMLAND_PLANTABLE.contains(stack.getItem());
     }
 
-    private boolean isBoneMeal(ItemStack stack) {
-        return !stack.isEmpty() && stack.getItem().equals(Items.BONE_MEAL);
-    }
-
-    private boolean isNetherWart(ItemStack stack) {
-        return !stack.isEmpty() && stack.getItem().equals(Items.NETHER_WART);
+    private boolean isHoe(ItemStack stack) {
+        return !stack.isEmpty() && (stack.getItem() == Items.WOODEN_HOE);
     }
 
     @Override
@@ -170,12 +166,12 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
         for (Harvest harvest : Harvest.values()) {
             scan.add(harvest.block);
         }
+
         if (Baritone.settings().replantCrops.value) {
             scan.add(Blocks.FARMLAND);
-            if (Baritone.settings().replantNetherWart.value) {
-                scan.add(Blocks.SOUL_SAND);
-            }
         }
+
+        scan.add(Blocks.DIRT);
 
         if (Baritone.settings().mineGoalUpdateInterval.value != 0 && tickCount++ % Baritone.settings().mineGoalUpdateInterval.value == 0) {
             Baritone.getExecutor().execute(() -> locations = WorldScanner.INSTANCE.scanChunkRadius(ctx, scan, 256, 10, 10));
@@ -185,32 +181,24 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
         }
         List<BlockPos> toBreak = new ArrayList<>();
         List<BlockPos> openFarmland = new ArrayList<>();
-        List<BlockPos> bonemealable = new ArrayList<>();
-        List<BlockPos> openSoulsand = new ArrayList<>();
+        List<BlockPos> tillLand = new ArrayList<>();
         for (BlockPos pos : locations) {
-            BlockState state = ctx.world().getBlockState(pos);
-            boolean airAbove = ctx.world().getBlockState(pos.up()).getBlock() instanceof AirBlock;
-            if (state.getBlock() == Blocks.FARMLAND) {
+            IBlockState state = ctx.world().getBlockState(pos);
+            boolean airAbove = ctx.world().getBlockState(pos.up()).getBlock() instanceof BlockAir;
+            boolean airAboveAbove = ctx.world().getBlockState(pos.up().up()).getBlock() instanceof BlockAir;
+            if ((state.getBlock() == Blocks.FARMLAND) &&
+                    (ctx.player().getPosition().getZ() != pos.getZ()) &&
+                    (ctx.player().getPosition().getX() != pos.getX())) {
                 if (airAbove) {
                     openFarmland.add(pos);
                 }
-                continue;
-            }
-            if (state.getBlock() == Blocks.SOUL_SAND) {
-                if (airAbove) {
-                    openSoulsand.add(pos);
+            } else if (state.getBlock() == Blocks.DIRT) {
+                if (airAbove && airAboveAbove)
+                {
+                    tillLand.add(pos);
                 }
-                continue;
-            }
-            if (readyForHarvest(ctx.world(), pos, state)) {
+            } else if (readyForHarvest(ctx.world(), pos, state)) {
                 toBreak.add(pos);
-                continue;
-            }
-            if (state.getBlock() instanceof IGrowable) {
-                IGrowable ig = (IGrowable) state.getBlock();
-                if (ig.canGrow(ctx.world(), pos, state, true) && ig.canUseBonemeal(ctx.world(), ctx.world().rand, pos, state)) {
-                    bonemealable.add(pos);
-                }
             }
         }
 
@@ -227,11 +215,9 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
             }
         }
         ArrayList<BlockPos> both = new ArrayList<>(openFarmland);
-        both.addAll(openSoulsand);
         for (BlockPos pos : both) {
-            boolean soulsand = openSoulsand.contains(pos);
             Optional<Rotation> rot = RotationUtils.reachableOffset(ctx.player(), pos, new Vector3d(pos.getX() + 0.5, pos.getY() + 1, pos.getZ() + 0.5), ctx.playerController().getBlockReachDistance(), false);
-            if (rot.isPresent() && isSafeToCancel && baritone.getInventoryBehavior().throwaway(true, soulsand ? this::isNetherWart : this::isPlantable)) {
+            if (rot.isPresent() && isSafeToCancel && baritone.getInventoryBehavior().throwaway(true, this::isPlantable)) {
                 RayTraceResult result = RayTraceUtils.rayTraceTowards(ctx.player(), rot.get(), ctx.playerController().getBlockReachDistance());
                 if (result instanceof BlockRayTraceResult && ((BlockRayTraceResult) result).getFace() == Direction.UP) {
                     baritone.getLookBehavior().updateTarget(rot.get(), true);
@@ -242,9 +228,11 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
                 }
             }
         }
-        for (BlockPos pos : bonemealable) {
+
+        for (BlockPos pos : tillLand)
+        {
             Optional<Rotation> rot = RotationUtils.reachable(ctx, pos);
-            if (rot.isPresent() && isSafeToCancel && baritone.getInventoryBehavior().throwaway(true, this::isBoneMeal)) {
+            if (rot.isPresent() && isSafeToCancel && baritone.getInventoryBehavior().throwaway(true, this::isHoe)) {
                 baritone.getLookBehavior().updateTarget(rot.get(), true);
                 if (ctx.isLookingAt(pos)) {
                     baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_RIGHT, true);
@@ -269,16 +257,6 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
         if (baritone.getInventoryBehavior().throwaway(false, this::isPlantable)) {
             for (BlockPos pos : openFarmland) {
                 goalz.add(new GoalBlock(pos.up()));
-            }
-        }
-        if (baritone.getInventoryBehavior().throwaway(false, this::isNetherWart)) {
-            for (BlockPos pos : openSoulsand) {
-                goalz.add(new GoalBlock(pos.up()));
-            }
-        }
-        if (baritone.getInventoryBehavior().throwaway(false, this::isBoneMeal)) {
-            for (BlockPos pos : bonemealable) {
-                goalz.add(new GoalBlock(pos));
             }
         }
         for (Entity entity : ctx.entities()) {
