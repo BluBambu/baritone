@@ -32,13 +32,20 @@ import baritone.cache.WorldScanner;
 import baritone.pathing.movement.MovementHelper;
 import baritone.utils.BaritoneProcessHelper;
 import baritone.utils.NotificationHelper;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 import com.sun.org.apache.xerces.internal.util.ShadowedSymbolTable;
 import net.minecraft.block.*;
+import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.item.ItemEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.scoreboard.Score;
+import net.minecraft.scoreboard.ScoreObjective;
+import net.minecraft.scoreboard.ScorePlayerTeam;
+import net.minecraft.scoreboard.Scoreboard;
 import net.minecraft.util.Direction;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.BlockRayTraceResult;
@@ -46,11 +53,10 @@ import net.minecraft.util.math.RayTraceResult;
 import net.minecraft.util.math.vector.Vector3d;
 import net.minecraft.world.World;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.function.Predicate;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public final class FarmProcess extends BaritoneProcessHelper implements IFarmProcess {
 
@@ -160,8 +166,79 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
         return !stack.isEmpty() && (stack.getItem() == Items.WOODEN_HOE);
     }
 
+    private static String getSuffixFromContainingTeam(Scoreboard scoreboard, String member) {
+        String suffix = null;
+        for (ScorePlayerTeam team : scoreboard.getTeams()) {
+            if (team.getMembershipCollection().contains(member)) {
+                suffix = team.getPrefix().getString() + team.getSuffix().getString();
+                break;
+            }
+        }
+        return (suffix == null ? "" : suffix);
+    }
+
+    private boolean count = false;
+
+    private boolean checkIsOnSkyblock() {
+        Minecraft mc = Minecraft.getInstance();
+        World world = mc.world;
+        if (world == null) {
+            logDirect("No scoreboard present, pausing");
+            return false;
+        }
+
+        final Pattern STRIP_COLOR_PATTERN = Pattern.compile("(?i)§[0-9A-FK-OR]");
+
+        Scoreboard scoreboard = world.getScoreboard();
+        ScoreObjective sidebarObjective = scoreboard.getObjectiveInDisplaySlot(1);
+        if (sidebarObjective != null) {
+            if (!STRIP_COLOR_PATTERN.matcher(sidebarObjective.getDisplayName().getString()).replaceAll("").trim().toLowerCase().contains("skyblock"))
+            {
+                logDirect("Not in skyblock");
+                onFail();
+                return false;
+            }
+
+            Collection<Score> scoreboardLines = scoreboard.getSortedScores(sidebarObjective);
+
+            List<String> found = scoreboardLines.stream()
+                    .filter(score -> score.getObjective().getName().equals(sidebarObjective.getName()))
+                    .map(score -> score.getPlayerName() + getSuffixFromContainingTeam(scoreboard, score.getPlayerName()))
+                    .collect(Collectors.toList());
+
+            for (String line : found) {
+                final Pattern SCOREBOARD_CHARACTERS = Pattern.compile("[^a-z A-Z:0-9/'.]");
+
+                String strippedLine = SCOREBOARD_CHARACTERS.matcher(STRIP_COLOR_PATTERN.matcher(line).replaceAll("")).replaceAll("").trim().toLowerCase();
+                if (strippedLine.contains("your island")) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+        else
+        {
+            logDirect("No scoreboard objective present");
+            onFail();
+        }
+        return false;
+    }
+
+    private void onFail() {
+        logDirect("Farm failed");
+        if (Baritone.settings().desktopNotifications.value && Baritone.settings().notificationOnFarmFail.value) {
+            NotificationHelper.notify("Farm failed", true);
+        }
+        onLostControl();
+    }
+
     @Override
     public PathingCommand onTick(boolean calcFailed, boolean isSafeToCancel) {
+        if (!checkIsOnSkyblock()) {
+            return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
+        }
+
         ArrayList<Block> scan = new ArrayList<>();
         for (Harvest harvest : Harvest.values()) {
             scan.add(harvest.block);
@@ -187,8 +264,8 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
             boolean airAbove = ctx.world().getBlockState(pos.up()).getBlock() instanceof AirBlock;
             boolean airAboveAbove = ctx.world().getBlockState(pos.up().up()).getBlock() instanceof AirBlock;
             if ((state.getBlock() == Blocks.FARMLAND) &&
-                    (ctx.player().getPosition().getZ() != pos.getZ()) &&
-                    (ctx.player().getPosition().getX() != pos.getX())) {
+                    (Math.abs(ctx.player().getPosition().getZ() - pos.getZ()) +
+                        Math.abs(ctx.player().getPosition().getX() - pos.getX())) > 1) {
                 if (airAbove) {
                     openFarmland.add(pos);
                 }
@@ -205,15 +282,15 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
         baritone.getInputOverrideHandler().clearAllKeys();
         for (BlockPos pos : toBreak) {
             Optional<Rotation> rot = RotationUtils.reachable(ctx, pos);
-            if (rot.isPresent() && isSafeToCancel) {
+            if (rot.isPresent() && isSafeToCancel && baritone.getInventoryBehavior().throwaway(true, this::isHoe)) {
                 baritone.getLookBehavior().updateTarget(rot.get(), true);
-                MovementHelper.switchToBestToolFor(ctx, ctx.world().getBlockState(pos));
                 if (ctx.isLookingAt(pos)) {
                     baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_LEFT, true);
                 }
                 return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
             }
         }
+
         ArrayList<BlockPos> both = new ArrayList<>(openFarmland);
         for (BlockPos pos : both) {
             Optional<Rotation> rot = RotationUtils.reachableOffset(ctx.player(), pos, new Vector3d(pos.getX() + 0.5, pos.getY() + 1, pos.getZ() + 0.5), ctx.playerController().getBlockReachDistance(), false);
@@ -242,11 +319,7 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
         }
 
         if (calcFailed) {
-            logDirect("Farm failed");
-            if (Baritone.settings().desktopNotifications.value && Baritone.settings().notificationOnFarmFail.value) {
-                NotificationHelper.notify("Farm failed", true);
-            }
-            onLostControl();
+            onFail();
             return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
         }
 
