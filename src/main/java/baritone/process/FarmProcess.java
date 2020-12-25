@@ -106,8 +106,8 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
         POTATOES((CropsBlock) Blocks.POTATOES),
         BEETROOT((CropsBlock) Blocks.BEETROOTS),
         PUMPKIN(Blocks.PUMPKIN, state -> true),
-        MELON(Blocks.MELON_BLOCK, state -> true),
-        SUGARCANE(Blocks.REEDS, null) {
+        MELON(Blocks.MELON, state -> true),
+        SUGARCANE(Blocks.SUGAR_CANE, null) {
             @Override
             public boolean readyToHarvest(World world, BlockPos pos, BlockState state) {
                 if (Baritone.settings().replantCrops.value) {
@@ -183,9 +183,9 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
         List<BlockPos> openFarmland = new ArrayList<>();
         List<BlockPos> tillLand = new ArrayList<>();
         for (BlockPos pos : locations) {
-            IBlockState state = ctx.world().getBlockState(pos);
-            boolean airAbove = ctx.world().getBlockState(pos.up()).getBlock() instanceof BlockAir;
-            boolean airAboveAbove = ctx.world().getBlockState(pos.up().up()).getBlock() instanceof BlockAir;
+            BlockState state = ctx.world().getBlockState(pos);
+            boolean airAbove = ctx.world().getBlockState(pos.up()).getBlock() instanceof AirBlock;
+            boolean airAboveAbove = ctx.world().getBlockState(pos.up().up()).getBlock() instanceof AirBlock;
             if ((state.getBlock() == Blocks.FARMLAND) &&
                     (ctx.player().getPosition().getZ() != pos.getZ()) &&
                     (ctx.player().getPosition().getX() != pos.getX())) {
