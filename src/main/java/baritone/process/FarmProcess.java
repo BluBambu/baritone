@@ -37,8 +37,15 @@ import com.google.common.collect.Lists;
 import com.sun.org.apache.xerces.internal.util.ShadowedSymbolTable;
 import net.minecraft.block.*;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.screen.inventory.ChestScreen;
+import net.minecraft.client.settings.KeyBinding;
+import net.minecraft.enchantment.Enchantment;
+import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.item.ItemEntity;
+import net.minecraft.inventory.container.ClickType;
+import net.minecraft.item.HoeItem;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -47,6 +54,7 @@ import net.minecraft.scoreboard.ScoreObjective;
 import net.minecraft.scoreboard.ScorePlayerTeam;
 import net.minecraft.scoreboard.Scoreboard;
 import net.minecraft.util.Direction;
+import net.minecraft.util.NonNullList;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.BlockRayTraceResult;
 import net.minecraft.util.math.RayTraceResult;
@@ -64,6 +72,7 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
 
     private List<BlockPos> locations;
     private int tickCount;
+    private boolean waitIslandTeleport;
 
     private static final List<Item> FARMLAND_PLANTABLE = Arrays.asList(
             Items.BEETROOT_SEEDS,
@@ -159,11 +168,11 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
     }
 
     private boolean isPlantable(ItemStack stack) {
-        return FARMLAND_PLANTABLE.contains(stack.getItem());
+        return FARMLAND_PLANTABLE.contains(stack.getItem()) && EnchantmentHelper.getEnchantments(stack).isEmpty();
     }
 
     private boolean isHoe(ItemStack stack) {
-        return !stack.isEmpty() && (stack.getItem() == Items.WOODEN_HOE);
+        return !stack.isEmpty() && (stack.getItem() instanceof HoeItem);
     }
 
     private static String getSuffixFromContainingTeam(Scoreboard scoreboard, String member) {
@@ -177,52 +186,57 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
         return (suffix == null ? "" : suffix);
     }
 
-    private boolean count = false;
+    private boolean shouldTeleport() {
+        final Pattern STRIP_COLOR_PATTERN = Pattern.compile("(?i)§[0-9A-FK-OR]");
 
-    private boolean checkIsOnSkyblock() {
-        Minecraft mc = Minecraft.getInstance();
-        World world = mc.world;
+        World world = Minecraft.getInstance().world;
         if (world == null) {
-            logDirect("No scoreboard present, pausing");
+            logDirect("No world is currently loaded, pausing");
             return false;
         }
-
-        final Pattern STRIP_COLOR_PATTERN = Pattern.compile("(?i)§[0-9A-FK-OR]");
 
         Scoreboard scoreboard = world.getScoreboard();
         ScoreObjective sidebarObjective = scoreboard.getObjectiveInDisplaySlot(1);
-        if (sidebarObjective != null) {
-            if (!STRIP_COLOR_PATTERN.matcher(sidebarObjective.getDisplayName().getString()).replaceAll("").trim().toLowerCase().contains("skyblock"))
-            {
-                logDirect("Not in skyblock");
-                onFail();
-                return false;
-            }
-
-            Collection<Score> scoreboardLines = scoreboard.getSortedScores(sidebarObjective);
-
-            List<String> found = scoreboardLines.stream()
-                    .filter(score -> score.getObjective().getName().equals(sidebarObjective.getName()))
-                    .map(score -> score.getPlayerName() + getSuffixFromContainingTeam(scoreboard, score.getPlayerName()))
-                    .collect(Collectors.toList());
-
-            for (String line : found) {
-                final Pattern SCOREBOARD_CHARACTERS = Pattern.compile("[^a-z A-Z:0-9/'.]");
-
-                String strippedLine = SCOREBOARD_CHARACTERS.matcher(STRIP_COLOR_PATTERN.matcher(line).replaceAll("")).replaceAll("").trim().toLowerCase();
-                if (strippedLine.contains("your island")) {
-                    return true;
-                }
-            }
-
+        if (sidebarObjective == null) {
+            logDirect("No scoreboard loaded, pausing");
             return false;
         }
-        else
+
+        if (!STRIP_COLOR_PATTERN.matcher(sidebarObjective.getDisplayName().getString()).replaceAll("").trim().toLowerCase().contains("skyblock"))
         {
-            logDirect("No scoreboard objective present");
+            logDirect("Not in skyblock, failing out");
             onFail();
+            return false;
         }
-        return false;
+
+        Collection<Score> scoreboardLines = scoreboard.getSortedScores(sidebarObjective);
+
+        List<String> found = scoreboardLines.stream()
+                .filter(score -> score.getObjective().getName().equals(sidebarObjective.getName()))
+                .map(score -> score.getPlayerName() + getSuffixFromContainingTeam(scoreboard, score.getPlayerName()))
+                .collect(Collectors.toList());
+
+        for (String line : found) {
+            final Pattern SCOREBOARD_CHARACTERS = Pattern.compile("[^a-z A-Z:0-9/'.]");
+
+            String strippedLine = SCOREBOARD_CHARACTERS.matcher(STRIP_COLOR_PATTERN.matcher(line).replaceAll("")).replaceAll("").trim().toLowerCase();
+            if (strippedLine.contains("your island")) {
+                waitIslandTeleport = false;
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private boolean checkAndWarpIsland() {
+        if (shouldTeleport() && !waitIslandTeleport) {
+            mc.player.sendChatMessage("/warp home");
+            waitIslandTeleport = true;
+            return true;
+        }
+
+        return waitIslandTeleport;
     }
 
     private void onFail() {
@@ -233,9 +247,144 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
         onLostControl();
     }
 
+    private boolean combineCarrots() {
+//        NonNullList<ItemStack> inv = ctx.player().inventory.mainInventory;
+//
+//        boolean shouldCombine = false;
+//        List<Integer> carrotSlots = new ArrayList<>();
+//        for (int i = (inv.size() - 1); i >= 8; i--) {
+//            ItemStack stack = inv.get(i);
+//            if (stack.isEmpty()) {
+//                continue;
+//            }
+//
+//            Map<Enchantment, Integer> enchants = EnchantmentHelper.getEnchantments((stack));
+//            if (enchants.size() > 0) {
+//                continue;
+//            }
+//
+//            if (stack.getCount() != 64) {
+//                continue;
+//            }
+//
+//            if (stack.getItem() != Items.CARROT) {
+//                continue;
+//            }
+//
+//            carrotSlots.add(i);
+//            if (carrotSlots.size() == 5) {
+//                shouldCombine = true;
+//                break;
+//            }
+//        }
+//
+//        if (shouldCombine) {
+//            if (carrotState == CarrotState.None) {
+//                logDirect("Found 5 full stacks of carrots, attempting to combine");
+//            }
+//        } else {
+//            return false;
+//        }
+//
+//        if (carrotState == CarrotState.None) {
+//            logDirect("Opening main menu to craft");
+//            ctx.player().inventory.currentItem = 8;
+//            KeyBinding.onTick(mc.gameSettings.keyBindUseItem.getDefault());
+//            carrotState = CarrotState.OpeningMainMenu;
+//            return true;
+//        }
+//
+//        if (carrotState == CarrotState.OpeningMainMenu) {
+//            Screen screen = mc.currentScreen;
+//            if (!(screen instanceof  ChestScreen)) {
+//                logDirect("No chest screen instance");
+//                return true;
+//            }
+//
+//            ChestScreen chestScreen = (ChestScreen) screen;
+//
+//            boolean foundCraftingChest = false;
+//            for (ItemStack itemStack : chestScreen.getContainer().getInventory()) {
+//                if (itemStack.getItem() == Items.CRAFTING_TABLE) {
+//                    foundCraftingChest = true;
+//                }
+//            }
+//
+//            if (!foundCraftingChest) {
+//                logDirect(("No crafting chest"));
+//                return true;
+//            }
+//
+//            logDirect("Opening crafting menu");
+//            mc.playerController.windowClick(chestScreen.getContainer().windowId, 31, 0, ClickType.PICKUP, mc.player);
+//            carrotState = CarrotState.OpeningCraftingMenu;
+//            return true;
+//        }
+//
+//        if (carrotState == CarrotState.OpeningCraftingMenu) {
+//            ChestScreen chestScreen = (ChestScreen) mc.currentScreen;
+//
+//            for (ItemStack itemStack : chestScreen.getContainer().getInventory()) {
+//                if (itemStack.getItem() == Items.CRAFTING_TABLE) {
+//                    logDirect("Crafting menu hasn't opened yet");
+//                    return true;
+//                }
+//            }
+//
+//            count = count + 1;
+//            if (count < 100) {
+//                logDebug(count + "");
+//                return true;
+//            }
+//
+//            List<Integer> craftSlots = Arrays.asList(10, 11, 12, 19, 20);
+//            for (int i = 0; i < 5; i++) {
+//                int craftSlot = craftSlots.get(i);
+//                int invSlot = carrotSlots.get(i);
+//                int newInvSlot = 6 * 9 + invSlot - 9;
+//
+//                logDirect(
+//                        invSlot + " " + newInvSlot + " " + chestScreen.getContainer().getInventory().get(newInvSlot).getDisplayName().getString() + " " +
+//                                invSlot + " " + craftSlot + " " + chestScreen.getContainer().getInventory().get(craftSlot).getDisplayName().getString()
+//                );
+//
+//                if (i == 1) {
+//                    ctx.playerController().windowClick(
+//                            chestScreen.getContainer().windowId,
+//                            newInvSlot,
+//                            craftSlot,
+//                            ClickType.SWAP,
+//                            ctx.player());
+//                }
+//            }
+//
+//            carrotState = CarrotState.AddItems;
+//            return true;
+//        }
+//    // 23
+//        return true;
+        return false;
+    }
+
+    private int count = 0;
+    private CarrotState carrotState = CarrotState.None;
+
+    enum CarrotState {
+        None,
+        OpeningMainMenu,
+        OpeningCraftingMenu,
+        AddItems,
+        CraftCarrots,
+        Exiting
+    }
+
     @Override
     public PathingCommand onTick(boolean calcFailed, boolean isSafeToCancel) {
-        if (!checkIsOnSkyblock()) {
+        if (checkAndWarpIsland()) {
+            return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
+        }
+
+        if (combineCarrots()) {
             return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
         }
 
@@ -251,11 +400,13 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
         scan.add(Blocks.DIRT);
 
         if (Baritone.settings().mineGoalUpdateInterval.value != 0 && tickCount++ % Baritone.settings().mineGoalUpdateInterval.value == 0) {
-            Baritone.getExecutor().execute(() -> locations = WorldScanner.INSTANCE.scanChunkRadius(ctx, scan, 256, 10, 10));
+            Baritone.getExecutor().execute(() -> locations = WorldScanner.INSTANCE.scanChunkRadius(ctx, scan, 512, 10, 10));
         }
+
         if (locations == null) {
             return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
         }
+
         List<BlockPos> toBreak = new ArrayList<>();
         List<BlockPos> openFarmland = new ArrayList<>();
         List<BlockPos> tillLand = new ArrayList<>();
@@ -265,7 +416,7 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
             boolean airAboveAbove = ctx.world().getBlockState(pos.up().up()).getBlock() instanceof AirBlock;
             if ((state.getBlock() == Blocks.FARMLAND) &&
                     (Math.abs(ctx.player().getPosition().getZ() - pos.getZ()) +
-                        Math.abs(ctx.player().getPosition().getX() - pos.getX())) > 1) {
+                        Math.abs(ctx.player().getPosition().getX() - pos.getX())) > 0) {
                 if (airAbove) {
                     openFarmland.add(pos);
                 }
@@ -283,11 +434,14 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
         for (BlockPos pos : toBreak) {
             Optional<Rotation> rot = RotationUtils.reachable(ctx, pos);
             if (rot.isPresent() && isSafeToCancel && baritone.getInventoryBehavior().throwaway(true, this::isHoe)) {
-                baritone.getLookBehavior().updateTarget(rot.get(), true);
-                if (ctx.isLookingAt(pos)) {
-                    baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_LEFT, true);
+                RayTraceResult result = RayTraceUtils.rayTraceTowards(ctx.player(), rot.get(), ctx.playerController().getBlockReachDistance());
+                if (result instanceof BlockRayTraceResult && ((BlockRayTraceResult) result).getFace() == Direction.UP) {
+                    baritone.getLookBehavior().updateTarget(rot.get(), true);
+                    if (ctx.isLookingAt(pos)) {
+                        baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_LEFT, true);
+                    }
+                    return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
                 }
-                return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
             }
         }
 
@@ -306,21 +460,18 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
             }
         }
 
-        for (BlockPos pos : tillLand)
-        {
-            Optional<Rotation> rot = RotationUtils.reachable(ctx, pos);
+        for (BlockPos pos : tillLand) {
+            Optional<Rotation> rot = RotationUtils.reachableOffset(ctx.player(), pos, new Vector3d(pos.getX() + 0.5, pos.getY() + 1, pos.getZ() + 0.5), ctx.playerController().getBlockReachDistance(), false);
             if (rot.isPresent() && isSafeToCancel && baritone.getInventoryBehavior().throwaway(true, this::isHoe)) {
-                baritone.getLookBehavior().updateTarget(rot.get(), true);
-                if (ctx.isLookingAt(pos)) {
-                    baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_RIGHT, true);
+                RayTraceResult result = RayTraceUtils.rayTraceTowards(ctx.player(), rot.get(), ctx.playerController().getBlockReachDistance());
+                if (result instanceof BlockRayTraceResult && ((BlockRayTraceResult) result).getFace() == Direction.UP) {
+                    baritone.getLookBehavior().updateTarget(rot.get(), true);
+                    if (ctx.isLookingAt(pos)) {
+                        baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_RIGHT, true);
+                    }
+                    return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
                 }
-                return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
             }
-        }
-
-        if (calcFailed) {
-            onFail();
-            return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
         }
 
         List<Goal> goalz = new ArrayList<>();
@@ -341,6 +492,10 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
                 }
             }
         }
+        for (BlockPos pos : tillLand) {
+            goalz.add(new GoalBlock(pos.up()));
+        }
+
         return new PathingCommand(new GoalComposite(goalz.toArray(new Goal[0])), PathingCommandType.SET_GOAL_AND_PATH);
     }
 
