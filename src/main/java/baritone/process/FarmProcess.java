@@ -28,6 +28,7 @@ import baritone.api.utils.RayTraceUtils;
 import baritone.api.utils.Rotation;
 import baritone.api.utils.RotationUtils;
 import baritone.api.utils.input.Input;
+import baritone.behavior.InventoryBehavior;
 import baritone.cache.WorldScanner;
 import baritone.pathing.movement.MovementHelper;
 import baritone.utils.BaritoneProcessHelper;
@@ -247,6 +248,88 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
         onLostControl();
     }
 
+    private boolean swapEnchantedCarrots() {
+        NonNullList<ItemStack> inv = ctx.player().inventory.mainInventory;
+
+        int enchantedCarrotSlot = -1;
+        for (int i = 0; i < 9; i++) {
+            ItemStack stack = inv.get(i);
+            if (stack.isEmpty()) {
+                continue;
+            }
+
+            Map<Enchantment, Integer> enchants = EnchantmentHelper.getEnchantments(stack);
+            if (enchants.isEmpty() || (stack.getItem() != Items.CARROT)) {
+                continue;
+            }
+
+            enchantedCarrotSlot = i;
+        }
+
+        if (enchantedCarrotSlot != -1) {
+            for (int i = 9; i < inv.size(); i++) {
+                ItemStack stack = inv.get(i);
+                if (stack.isEmpty()) {
+                    continue;
+                }
+
+                Map<Enchantment, Integer> enchants = EnchantmentHelper.getEnchantments(stack);
+                if (!enchants.isEmpty()) {
+                    continue;
+                }
+
+                if (stack.getItem() == Items.CARROT) {
+                    logDirect("Swapping " + enchantedCarrotSlot + " with " + i);
+
+                    ctx.playerController().windowClick(
+                            ctx.player().container.windowId,
+                            i < 9 ? i + 36 : i,
+                            enchantedCarrotSlot,
+                            ClickType.SWAP,
+                            ctx.player());
+
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private boolean hasFullCarrotStackInHotkeys() {
+        NonNullList<ItemStack> inv = ctx.player().inventory.mainInventory;
+
+        for (int i = 0; i < inv.size(); i++) {
+            ItemStack stack = inv.get(i);
+            if (stack.isEmpty()) {
+                continue;
+            }
+
+            Map<Enchantment, Integer> enchants = EnchantmentHelper.getEnchantments(stack);
+            if (!enchants.isEmpty()) {
+                continue;
+            }
+
+            if ((stack.getCount() == 64) && (stack.getItem() == Items.CARROT)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private boolean isInvFull() {
+        NonNullList<ItemStack> inv = ctx.player().inventory.mainInventory;
+
+        for (ItemStack item : inv) {
+            if (item.isEmpty()) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     private boolean combineCarrots() {
 //        NonNullList<ItemStack> inv = ctx.player().inventory.mainInventory;
 //
@@ -366,25 +449,19 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
         return false;
     }
 
-    private int count = 0;
-    private CarrotState carrotState = CarrotState.None;
-
-    enum CarrotState {
-        None,
-        OpeningMainMenu,
-        OpeningCraftingMenu,
-        AddItems,
-        CraftCarrots,
-        Exiting
-    }
-
     @Override
     public PathingCommand onTick(boolean calcFailed, boolean isSafeToCancel) {
+        if (isInvFull()) {
+            logDirect("Inv is full, stopping...");
+            onFail();
+            return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
+        }
+
         if (checkAndWarpIsland()) {
             return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
         }
 
-        if (combineCarrots()) {
+        if (swapEnchantedCarrots()) {
             return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
         }
 
@@ -400,7 +477,7 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
         scan.add(Blocks.DIRT);
 
         if (Baritone.settings().mineGoalUpdateInterval.value != 0 && tickCount++ % Baritone.settings().mineGoalUpdateInterval.value == 0) {
-            Baritone.getExecutor().execute(() -> locations = WorldScanner.INSTANCE.scanChunkRadius(ctx, scan, 512, 10, 10));
+            Baritone.getExecutor().execute(() -> locations = WorldScanner.INSTANCE.scanChunkRadius(ctx, scan, 512, 20, 20));
         }
 
         if (locations == null) {
@@ -414,9 +491,11 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
             BlockState state = ctx.world().getBlockState(pos);
             boolean airAbove = ctx.world().getBlockState(pos.up()).getBlock() instanceof AirBlock;
             boolean airAboveAbove = ctx.world().getBlockState(pos.up().up()).getBlock() instanceof AirBlock;
-            if ((state.getBlock() == Blocks.FARMLAND) &&
-                    (Math.abs(ctx.player().getPosition().getZ() - pos.getZ()) +
-                        Math.abs(ctx.player().getPosition().getX() - pos.getX())) > 0) {
+            double deltaX = Math.abs(ctx.player().getPosX() - pos.getX());
+            double deltaY = Math.abs(ctx.player().getPosZ() - pos.getZ());
+            double deltaDistance = Math.sqrt(Math.pow(deltaX, 2) + Math.pow(deltaY, 2));
+
+            if ((state.getBlock() == Blocks.FARMLAND) && (deltaDistance >= 1.6)) {
                 if (airAbove) {
                     openFarmland.add(pos);
                 }
@@ -427,6 +506,30 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
                 }
             } else if (readyForHarvest(ctx.world(), pos, state)) {
                 toBreak.add(pos);
+            }
+        }
+
+        if (tillLand.size() > 10) {
+            openFarmland.clear();
+            toBreak.clear();
+        }
+
+        if (hasFullCarrotStackInHotkeys()) {
+            Map<Integer, List<BlockPos>> openFarmlandLevels = new Hashtable<>();
+            for (BlockPos pos : openFarmland) {
+                if (!openFarmlandLevels.containsKey(pos.getY())) {
+                    openFarmlandLevels.put(pos.getY(), new ArrayList<>());
+                }
+                openFarmlandLevels.get(pos.getY()).add(pos);
+            }
+
+            for (Map.Entry<Integer, List<BlockPos>> entry : openFarmlandLevels.entrySet()) {
+                if (entry.getValue().size() > 15) {
+                    tillLand.clear();
+                    toBreak.clear();
+                    openFarmland = entry.getValue();
+                    break;
+                }
             }
         }
 
@@ -478,20 +581,13 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
         for (BlockPos pos : toBreak) {
             goalz.add(new BuilderProcess.GoalBreak(pos));
         }
+
         if (baritone.getInventoryBehavior().throwaway(false, this::isPlantable)) {
             for (BlockPos pos : openFarmland) {
                 goalz.add(new GoalBlock(pos.up()));
             }
         }
-        for (Entity entity : ctx.entities()) {
-            if (entity instanceof ItemEntity && entity.isOnGround()) {
-                ItemEntity ei = (ItemEntity) entity;
-                if (PICKUP_DROPPED.contains(ei.getItem().getItem())) {
-                    // +0.1 because of farmland's 0.9375 dummy height lol
-                    goalz.add(new GoalBlock(new BlockPos(entity.getPositionVec().x, entity.getPositionVec().y + 0.1, entity.getPositionVec().z)));
-                }
-            }
-        }
+
         for (BlockPos pos : tillLand) {
             goalz.add(new GoalBlock(pos.up()));
         }
