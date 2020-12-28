@@ -21,6 +21,7 @@ import baritone.Baritone;
 import baritone.api.pathing.goals.Goal;
 import baritone.api.pathing.goals.GoalBlock;
 import baritone.api.pathing.goals.GoalComposite;
+import baritone.api.pathing.goals.GoalTwoBlocks;
 import baritone.api.process.IFarmProcess;
 import baritone.api.process.PathingCommand;
 import baritone.api.process.PathingCommandType;
@@ -28,23 +29,13 @@ import baritone.api.utils.RayTraceUtils;
 import baritone.api.utils.Rotation;
 import baritone.api.utils.RotationUtils;
 import baritone.api.utils.input.Input;
-import baritone.behavior.InventoryBehavior;
 import baritone.cache.WorldScanner;
-import baritone.pathing.movement.MovementHelper;
 import baritone.utils.BaritoneProcessHelper;
 import baritone.utils.NotificationHelper;
-import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
-import com.sun.org.apache.xerces.internal.util.ShadowedSymbolTable;
 import net.minecraft.block.*;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.screen.inventory.ChestScreen;
-import net.minecraft.client.settings.KeyBinding;
 import net.minecraft.enchantment.Enchantment;
 import net.minecraft.enchantment.EnchantmentHelper;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.item.ItemEntity;
 import net.minecraft.inventory.container.ClickType;
 import net.minecraft.item.HoeItem;
 import net.minecraft.item.Item;
@@ -296,11 +287,13 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
         return false;
     }
 
-    private boolean hasFullCarrotStackInHotkeys() {
+    private int getCarrotCountInHotkeys() {
         NonNullList<ItemStack> inv = ctx.player().inventory.mainInventory;
 
-        for (int i = 0; i < inv.size(); i++) {
+        int count = 0;
+        for (int i = 0; i < 9; i++) {
             ItemStack stack = inv.get(i);
+
             if (stack.isEmpty()) {
                 continue;
             }
@@ -310,12 +303,12 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
                 continue;
             }
 
-            if ((stack.getCount() == 64) && (stack.getItem() == Items.CARROT)) {
-                return true;
+            if (stack.getItem() == Items.CARROT) {
+                count += stack.getCount();
             }
         }
 
-        return false;
+        return count;
     }
 
     private boolean isInvFull() {
@@ -330,122 +323,56 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
         return true;
     }
 
-    private boolean combineCarrots() {
-//        NonNullList<ItemStack> inv = ctx.player().inventory.mainInventory;
-//
-//        boolean shouldCombine = false;
-//        List<Integer> carrotSlots = new ArrayList<>();
-//        for (int i = (inv.size() - 1); i >= 8; i--) {
-//            ItemStack stack = inv.get(i);
-//            if (stack.isEmpty()) {
-//                continue;
-//            }
-//
-//            Map<Enchantment, Integer> enchants = EnchantmentHelper.getEnchantments((stack));
-//            if (enchants.size() > 0) {
-//                continue;
-//            }
-//
-//            if (stack.getCount() != 64) {
-//                continue;
-//            }
-//
-//            if (stack.getItem() != Items.CARROT) {
-//                continue;
-//            }
-//
-//            carrotSlots.add(i);
-//            if (carrotSlots.size() == 5) {
-//                shouldCombine = true;
-//                break;
-//            }
-//        }
-//
-//        if (shouldCombine) {
-//            if (carrotState == CarrotState.None) {
-//                logDirect("Found 5 full stacks of carrots, attempting to combine");
-//            }
-//        } else {
-//            return false;
-//        }
-//
-//        if (carrotState == CarrotState.None) {
-//            logDirect("Opening main menu to craft");
-//            ctx.player().inventory.currentItem = 8;
-//            KeyBinding.onTick(mc.gameSettings.keyBindUseItem.getDefault());
-//            carrotState = CarrotState.OpeningMainMenu;
-//            return true;
-//        }
-//
-//        if (carrotState == CarrotState.OpeningMainMenu) {
-//            Screen screen = mc.currentScreen;
-//            if (!(screen instanceof  ChestScreen)) {
-//                logDirect("No chest screen instance");
-//                return true;
-//            }
-//
-//            ChestScreen chestScreen = (ChestScreen) screen;
-//
-//            boolean foundCraftingChest = false;
-//            for (ItemStack itemStack : chestScreen.getContainer().getInventory()) {
-//                if (itemStack.getItem() == Items.CRAFTING_TABLE) {
-//                    foundCraftingChest = true;
-//                }
-//            }
-//
-//            if (!foundCraftingChest) {
-//                logDirect(("No crafting chest"));
-//                return true;
-//            }
-//
-//            logDirect("Opening crafting menu");
-//            mc.playerController.windowClick(chestScreen.getContainer().windowId, 31, 0, ClickType.PICKUP, mc.player);
-//            carrotState = CarrotState.OpeningCraftingMenu;
-//            return true;
-//        }
-//
-//        if (carrotState == CarrotState.OpeningCraftingMenu) {
-//            ChestScreen chestScreen = (ChestScreen) mc.currentScreen;
-//
-//            for (ItemStack itemStack : chestScreen.getContainer().getInventory()) {
-//                if (itemStack.getItem() == Items.CRAFTING_TABLE) {
-//                    logDirect("Crafting menu hasn't opened yet");
-//                    return true;
-//                }
-//            }
-//
-//            count = count + 1;
-//            if (count < 100) {
-//                logDebug(count + "");
-//                return true;
-//            }
-//
-//            List<Integer> craftSlots = Arrays.asList(10, 11, 12, 19, 20);
-//            for (int i = 0; i < 5; i++) {
-//                int craftSlot = craftSlots.get(i);
-//                int invSlot = carrotSlots.get(i);
-//                int newInvSlot = 6 * 9 + invSlot - 9;
-//
-//                logDirect(
-//                        invSlot + " " + newInvSlot + " " + chestScreen.getContainer().getInventory().get(newInvSlot).getDisplayName().getString() + " " +
-//                                invSlot + " " + craftSlot + " " + chestScreen.getContainer().getInventory().get(craftSlot).getDisplayName().getString()
-//                );
-//
-//                if (i == 1) {
-//                    ctx.playerController().windowClick(
-//                            chestScreen.getContainer().windowId,
-//                            newInvSlot,
-//                            craftSlot,
-//                            ClickType.SWAP,
-//                            ctx.player());
-//                }
-//            }
-//
-//            carrotState = CarrotState.AddItems;
-//            return true;
-//        }
-//    // 23
-//        return true;
+    enum FarmAction {
+        Till,
+        Plant,
+        Harvest
+    };
+
+    private boolean hasToPlant = false;
+    private FarmAction cachedAction = FarmAction.Till;
+    private List<BlockPos> cachedBlocks = new ArrayList<>();
+
+    private List<BlockPos> GetLargestLevel(Map<Integer, List<BlockPos>> entries) {
+        if (entries.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        int largestEntry = 0;
+        int largestEntryLevel = 0;
+        for (Map.Entry<Integer, List<BlockPos>> entry : entries.entrySet()) {
+            if (entry.getValue().size() > largestEntry) {
+                largestEntry = entry.getValue().size();
+                largestEntryLevel = entry.getKey();
+            }
+        }
+
+        return entries.get(largestEntryLevel);
+    }
+
+    private boolean shouldFindNewBlocks() {
+        switch (cachedAction) {
+            case Harvest:
+                return cachedBlocks.isEmpty() || (hasToPlant && getCarrotCountInHotkeys() > 64);
+            case Plant:
+                if (getCarrotCountInHotkeys() == 0) {
+                    return true;
+                }
+
+                for (BlockPos pos : cachedBlocks) {
+                    double deltaX = Math.abs(ctx.player().getPosX() - pos.getX());
+                    double deltaY = Math.abs(ctx.player().getPosZ() - pos.getZ());
+                    double deltaDistance = Math.hypot(deltaX, deltaY);
+
+                    if (deltaDistance >= 1.6) {
+                        return false;
+                    }
+                }
+                return true;
+            case Till:
+                return cachedBlocks.isEmpty();
+        }
+
         return false;
     }
 
@@ -465,138 +392,176 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
             return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
         }
 
-        ArrayList<Block> scan = new ArrayList<>();
-        for (Harvest harvest : Harvest.values()) {
-            scan.add(harvest.block);
-        }
-
-        if (Baritone.settings().replantCrops.value) {
-            scan.add(Blocks.FARMLAND);
-        }
-
-        scan.add(Blocks.DIRT);
-
-        if (Baritone.settings().mineGoalUpdateInterval.value != 0 && tickCount++ % Baritone.settings().mineGoalUpdateInterval.value == 0) {
-            Baritone.getExecutor().execute(() -> locations = WorldScanner.INSTANCE.scanChunkRadius(ctx, scan, 512, 20, 20));
-        }
-
-        if (locations == null) {
-            return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
-        }
-
-        List<BlockPos> toBreak = new ArrayList<>();
-        List<BlockPos> openFarmland = new ArrayList<>();
-        List<BlockPos> tillLand = new ArrayList<>();
-        for (BlockPos pos : locations) {
-            BlockState state = ctx.world().getBlockState(pos);
-            boolean airAbove = ctx.world().getBlockState(pos.up()).getBlock() instanceof AirBlock;
-            boolean airAboveAbove = ctx.world().getBlockState(pos.up().up()).getBlock() instanceof AirBlock;
-            double deltaX = Math.abs(ctx.player().getPosX() - pos.getX());
-            double deltaY = Math.abs(ctx.player().getPosZ() - pos.getZ());
-            double deltaDistance = Math.sqrt(Math.pow(deltaX, 2) + Math.pow(deltaY, 2));
-
-            if ((state.getBlock() == Blocks.FARMLAND) && (deltaDistance >= 1.6)) {
-                if (airAbove) {
-                    openFarmland.add(pos);
-                }
-            } else if (state.getBlock() == Blocks.DIRT) {
-                if (airAbove && airAboveAbove)
-                {
-                    tillLand.add(pos);
-                }
-            } else if (readyForHarvest(ctx.world(), pos, state)) {
-                toBreak.add(pos);
-            }
-        }
-
-        if (tillLand.size() > 10) {
-            openFarmland.clear();
-            toBreak.clear();
-        }
-
-        if (hasFullCarrotStackInHotkeys()) {
-            Map<Integer, List<BlockPos>> openFarmlandLevels = new Hashtable<>();
-            for (BlockPos pos : openFarmland) {
-                if (!openFarmlandLevels.containsKey(pos.getY())) {
-                    openFarmlandLevels.put(pos.getY(), new ArrayList<>());
-                }
-                openFarmlandLevels.get(pos.getY()).add(pos);
+        if (shouldFindNewBlocks()) {
+            ArrayList<Block> scan = new ArrayList<>();
+            for (Harvest harvest : Harvest.values()) {
+                scan.add(harvest.block);
             }
 
-            for (Map.Entry<Integer, List<BlockPos>> entry : openFarmlandLevels.entrySet()) {
-                if (entry.getValue().size() > 15) {
-                    tillLand.clear();
-                    toBreak.clear();
-                    openFarmland = entry.getValue();
-                    break;
+            if (Baritone.settings().replantCrops.value) {
+                scan.add(Blocks.FARMLAND);
+            }
+
+            scan.add(Blocks.DIRT);
+
+            if (Baritone.settings().mineGoalUpdateInterval.value != 0 && tickCount++ % Baritone.settings().mineGoalUpdateInterval.value == 0) {
+                Baritone.getExecutor().execute(() -> locations = WorldScanner.INSTANCE.scanChunkRadius(ctx, scan, 512, -1, 10));
+            }
+
+            if (locations == null) {
+                return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
+            }
+
+            Map<Integer, List<BlockPos>> breakLevels = new Hashtable<>();
+            Map<Integer, List<BlockPos>> plantLevels = new Hashtable<>();
+            Map<Integer, List<BlockPos>> tillLevels = new Hashtable<>();
+
+            for (BlockPos pos : locations) {
+                BlockState state = ctx.world().getBlockState(pos);
+                boolean airAbove = ctx.world().getBlockState(pos.up()).getBlock() instanceof AirBlock;
+                boolean airAboveAbove = ctx.world().getBlockState(pos.up().up()).getBlock() instanceof AirBlock;
+
+                int keyValue = pos.getY();
+                if ((state.getBlock() == Blocks.FARMLAND)) {
+                    if (airAbove) {
+                        if (!plantLevels.containsKey(keyValue)) {
+                            plantLevels.put(keyValue, new ArrayList<>());
+                        }
+                        plantLevels.get(keyValue).add(pos);
+                    }
+                } else if (state.getBlock() == Blocks.DIRT) {
+                    if (airAbove && airAboveAbove) {
+                        if (!tillLevels.containsKey(keyValue)) {
+                            tillLevels.put(keyValue, new ArrayList<>());
+                        }
+                        tillLevels.get(keyValue).add(pos);
+                    }
+                } else if (readyForHarvest(ctx.world(), pos, state)) {
+                    if (!breakLevels.containsKey(keyValue)) {
+                        breakLevels.put(keyValue, new ArrayList<>());
+                    }
+                    breakLevels.get(keyValue).add(pos);
                 }
             }
+
+            cachedAction = FarmAction.Till;
+            cachedBlocks = GetLargestLevel(tillLevels);
+
+            if (cachedBlocks.isEmpty() && (getCarrotCountInHotkeys() >= 64)) {
+                cachedAction = FarmAction.Plant;
+                cachedBlocks = GetLargestLevel(plantLevels);
+            }
+
+            if (((cachedAction == FarmAction.Plant) && cachedBlocks.size() <= 5) ||
+                    (cachedAction == FarmAction.Till && cachedBlocks.isEmpty())) {
+                cachedAction = FarmAction.Harvest;
+                cachedBlocks = GetLargestLevel(breakLevels);
+            }
+
+            if (!cachedBlocks.isEmpty()) {
+                logDirect("Switched to " + cachedAction.name() + " on level " + cachedBlocks.get(0).getY() + " (" + cachedBlocks.size() + " actions)");
+            } else {
+                logDirect("No actions to take");
+            }
+
+            hasToPlant = GetLargestLevel(plantLevels).size() >= 5;
         }
 
+        List<Goal> goals = new ArrayList<>();
         baritone.getInputOverrideHandler().clearAllKeys();
-        for (BlockPos pos : toBreak) {
-            Optional<Rotation> rot = RotationUtils.reachable(ctx, pos);
-            if (rot.isPresent() && isSafeToCancel && baritone.getInventoryBehavior().throwaway(true, this::isHoe)) {
-                RayTraceResult result = RayTraceUtils.rayTraceTowards(ctx.player(), rot.get(), ctx.playerController().getBlockReachDistance());
-                if (result instanceof BlockRayTraceResult && ((BlockRayTraceResult) result).getFace() == Direction.UP) {
-                    baritone.getLookBehavior().updateTarget(rot.get(), true);
-                    if (ctx.isLookingAt(pos)) {
-                        baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_LEFT, true);
+        switch (cachedAction) {
+            case Till:
+                for (int i = (cachedBlocks.size() - 1); i >= 0; i--) {
+                    BlockPos pos = cachedBlocks.get(i);
+                    Optional<Rotation> rot = RotationUtils.reachableOffset(
+                            ctx.player(),
+                            pos,
+                            new Vector3d(pos.getX() + 0.5,
+                                    pos.getY() + 1,
+                                    pos.getZ() + 0.5),
+                            ctx.playerController().getBlockReachDistance(),
+                            false);
+                    if (rot.isPresent() && isSafeToCancel && baritone.getInventoryBehavior().throwaway(true, this::isHoe)) {
+                        RayTraceResult result = RayTraceUtils.rayTraceTowards(
+                                ctx.player(),
+                                rot.get(),
+                                ctx.playerController().getBlockReachDistance());
+                        if (result instanceof BlockRayTraceResult && ((BlockRayTraceResult) result).getFace() == Direction.UP) {
+                            baritone.getLookBehavior().updateTarget(rot.get(), true);
+                            if (ctx.isLookingAt(pos)) {
+                                baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_RIGHT, true);
+                                cachedBlocks.remove(i);
+                            }
+                            return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
+                        }
                     }
-                    return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
-                }
-            }
-        }
 
-        ArrayList<BlockPos> both = new ArrayList<>(openFarmland);
-        for (BlockPos pos : both) {
-            Optional<Rotation> rot = RotationUtils.reachableOffset(ctx.player(), pos, new Vector3d(pos.getX() + 0.5, pos.getY() + 1, pos.getZ() + 0.5), ctx.playerController().getBlockReachDistance(), false);
-            if (rot.isPresent() && isSafeToCancel && baritone.getInventoryBehavior().throwaway(true, this::isPlantable)) {
-                RayTraceResult result = RayTraceUtils.rayTraceTowards(ctx.player(), rot.get(), ctx.playerController().getBlockReachDistance());
-                if (result instanceof BlockRayTraceResult && ((BlockRayTraceResult) result).getFace() == Direction.UP) {
-                    baritone.getLookBehavior().updateTarget(rot.get(), true);
-                    if (ctx.isLookingAt(pos)) {
-                        baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_RIGHT, true);
+                    goals.add(new GoalBlock(pos.up()));
+                }
+                break;
+            case Plant:
+                for (int i = (cachedBlocks.size() - 1); i >= 0; i--) {
+                    BlockPos pos = cachedBlocks.get(i);
+                    double deltaX = Math.abs(ctx.player().getPosX() - pos.getX());
+                    double deltaY = Math.abs(ctx.player().getPosZ() - pos.getZ());
+                    double deltaDistance = Math.hypot(deltaX, deltaY);
+
+                    if (deltaDistance >= 1.6) {
+                        Optional<Rotation> rot = RotationUtils.reachableOffset(
+                                ctx.player(),
+                                pos,
+                                new Vector3d(pos.getX() + 0.5,
+                                        pos.getY() + 1,
+                                        pos.getZ() + 0.5),
+                                ctx.playerController().getBlockReachDistance(),
+                                false);
+                        if (rot.isPresent() && isSafeToCancel && baritone.getInventoryBehavior().throwaway(true, this::isPlantable)) {
+                            RayTraceResult result = RayTraceUtils.rayTraceTowards(ctx.player(), rot.get(), ctx.playerController().getBlockReachDistance());
+                            if (result instanceof BlockRayTraceResult && ((BlockRayTraceResult) result).getFace() == Direction.UP) {
+                                baritone.getLookBehavior().updateTarget(rot.get(), true);
+                                if (ctx.isLookingAt(pos)) {
+                                    baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_RIGHT, true);
+                                    cachedBlocks.remove(i);
+                                }
+                                return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
+                            }
+                        }
+
+                        goals.add(new GoalBlock(pos.up()));
                     }
-                    return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
                 }
-            }
-        }
-
-        for (BlockPos pos : tillLand) {
-            Optional<Rotation> rot = RotationUtils.reachableOffset(ctx.player(), pos, new Vector3d(pos.getX() + 0.5, pos.getY() + 1, pos.getZ() + 0.5), ctx.playerController().getBlockReachDistance(), false);
-            if (rot.isPresent() && isSafeToCancel && baritone.getInventoryBehavior().throwaway(true, this::isHoe)) {
-                RayTraceResult result = RayTraceUtils.rayTraceTowards(ctx.player(), rot.get(), ctx.playerController().getBlockReachDistance());
-                if (result instanceof BlockRayTraceResult && ((BlockRayTraceResult) result).getFace() == Direction.UP) {
-                    baritone.getLookBehavior().updateTarget(rot.get(), true);
-                    if (ctx.isLookingAt(pos)) {
-                        baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_RIGHT, true);
+                break;
+            case Harvest:
+                for (int i = (cachedBlocks.size() - 1); i >= 0; i--) {
+                    BlockPos pos = cachedBlocks.get(i);
+                    Optional<Rotation> rot = RotationUtils.reachable(ctx, pos);
+                    if (rot.isPresent() && isSafeToCancel && baritone.getInventoryBehavior().throwaway(true, this::isHoe)) {
+                        RayTraceResult result = RayTraceUtils.rayTraceTowards(ctx.player(), rot.get(), ctx.playerController().getBlockReachDistance());
+                        if (result instanceof BlockRayTraceResult && ((BlockRayTraceResult) result).getFace() == Direction.UP) {
+                            baritone.getLookBehavior().updateTarget(rot.get(), true);
+                            if (ctx.isLookingAt(pos)) {
+                                baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_LEFT, true);
+                                cachedBlocks.remove(i);
+                            }
+                            return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
+                        }
                     }
-                    return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
+
+                    goals.add(new BuilderProcess.GoalBreak(pos));
                 }
-            }
+                break;
         }
 
-        List<Goal> goalz = new ArrayList<>();
-        for (BlockPos pos : toBreak) {
-            goalz.add(new BuilderProcess.GoalBreak(pos));
+        if (!goals.isEmpty()) {
+            return new PathingCommand(new GoalComposite(goals.toArray(new Goal[0])), PathingCommandType.SET_GOAL_AND_PATH);
         }
-
-        if (baritone.getInventoryBehavior().throwaway(false, this::isPlantable)) {
-            for (BlockPos pos : openFarmland) {
-                goalz.add(new GoalBlock(pos.up()));
-            }
-        }
-
-        for (BlockPos pos : tillLand) {
-            goalz.add(new GoalBlock(pos.up()));
-        }
-
-        return new PathingCommand(new GoalComposite(goalz.toArray(new Goal[0])), PathingCommandType.SET_GOAL_AND_PATH);
+        return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
     }
 
     @Override
     public void onLostControl() {
+        cachedAction = FarmAction.Till;
+        cachedBlocks = new ArrayList<>();
         active = false;
     }
 
