@@ -464,7 +464,7 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
                 logDirect("No actions to take");
             }
 
-            hasToPlant = GetLargestLevel(plantLevels).size() >= 5;
+            hasToPlant = GetLargestLevel(plantLevels).size() >= 15;
         }
 
         List<Goal> goals = new ArrayList<>();
