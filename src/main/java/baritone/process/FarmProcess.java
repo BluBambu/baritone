@@ -33,7 +33,6 @@ import baritone.utils.BaritoneProcessHelper;
 import baritone.utils.HypixelHelper;
 import baritone.utils.NotificationHelper;
 import net.minecraft.block.*;
-import net.minecraft.enchantment.Enchantment;
 import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.inventory.container.ClickType;
 import net.minecraft.item.HoeItem;
@@ -71,8 +70,8 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
     private List<BlockPos> cachedBlocks = new ArrayList<>();
 
     private static final List<Item> FARMLAND_PLANTABLE = Arrays.asList(
-            Items.POTATO,
-            Items.CARROT
+            Items.POTATO
+//            Items.CARROT
     );
 
     public FarmProcess(Baritone baritone) {
