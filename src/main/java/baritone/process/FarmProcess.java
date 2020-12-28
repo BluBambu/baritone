@@ -236,6 +236,15 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
             return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
         }
 
+        if (cachedAction == FarmAction.Plant) {
+            for (int i = (cachedBlocks.size() - 1); i >= 0; i--) {
+                if ((ctx.world().getBlockState(cachedBlocks.get(i)).getBlock() != Blocks.FARMLAND) ||
+                        (ctx.world().getBlockState(cachedBlocks.get(i).up()).getBlock() != Blocks.AIR)) {
+                    cachedBlocks.remove(i);
+                }
+            }
+        }
+
         if (shouldFindNewBlocks()) {
             if (Baritone.settings().mineGoalUpdateInterval.value != 0 && tickCount++ % Baritone.settings().mineGoalUpdateInterval.value == 0) {
                 Baritone.getExecutor().execute(() -> locations = WorldScanner.INSTANCE.scanChunkRadius(ctx, blocksToScan, 512, -1, 10));
@@ -349,7 +358,6 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
                             baritone.getLookBehavior().updateTarget(rot.get(), true);
                             if (ctx.isLookingAt(pos)) {
                                 baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_RIGHT, true);
-                                logDirect(pos + "fff");
                                 cachedBlocks.remove(i);
                             }
                             return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
