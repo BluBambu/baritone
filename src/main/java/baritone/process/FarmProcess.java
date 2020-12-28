@@ -527,7 +527,8 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
                             }
                         }
 
-                        goals.add(new GoalBlock(pos.up()));
+                        goals.add(new BuilderProcess.GoalPlace(pos));
+//                        goals.add(new GoalBlock(pos.up()));
                     }
                 }
                 break;
@@ -547,7 +548,7 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
                         }
                     }
 
-                    goals.add(new BuilderProcess.GoalBreak(pos));
+                    goals.add(new GoalBlock(pos));
                 }
                 break;
         }
