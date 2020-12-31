@@ -44,7 +44,7 @@ public final class Settings {
     /**
      * Allow Baritone to break blocks
      */
-    public final Setting<Boolean> allowBreak = new Setting<>(true);
+    public final Setting<Boolean> allowBreak = new Setting<>(false);
 
     /**
      * Allow Baritone to sprint
@@ -54,12 +54,12 @@ public final class Settings {
     /**
      * Allow Baritone to place blocks
      */
-    public final Setting<Boolean> allowPlace = new Setting<>(true);
+    public final Setting<Boolean> allowPlace = new Setting<>(false);
 
     /**
      * Allow Baritone to move items in your inventory to your hotbar
      */
-    public final Setting<Boolean> allowInventory = new Setting<>(false);
+    public final Setting<Boolean> allowInventory = new Setting<>(true);
 
     /**
      * Disable baritone's auto-tool at runtime, but still assume that another mod will provide auto tool functionality
