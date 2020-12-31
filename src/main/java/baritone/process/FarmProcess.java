@@ -260,7 +260,6 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
             for (BlockPos pos : locations) {
                 BlockState state = ctx.world().getBlockState(pos);
                 boolean airAbove = ctx.world().getBlockState(pos.up()).getBlock() instanceof AirBlock;
-                boolean airAboveAbove = ctx.world().getBlockState(pos.up().up()).getBlock() instanceof AirBlock;
 
                 int keyValue = pos.getY();
                 if ((state.getBlock() == Blocks.FARMLAND)) {
@@ -271,7 +270,7 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
                         plantLevels.get(keyValue).add(pos);
                     }
                 } else if (state.getBlock() == Blocks.DIRT) {
-                    if (airAbove && airAboveAbove) {
+                    if (airAbove) {
                         if (!tillLevels.containsKey(keyValue)) {
                             tillLevels.put(keyValue, new ArrayList<>());
                         }

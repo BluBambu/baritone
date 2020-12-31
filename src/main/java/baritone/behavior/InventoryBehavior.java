@@ -55,9 +55,9 @@ public final class InventoryBehavior extends Behavior {
             // we have a crafting table or a chest or something open
             return;
         }
-        if (firstValidThrowaway() >= 9) { // aka there are none on the hotbar, but there are some in main inventory
-            swapWithHotBar(firstValidThrowaway(), 8);
-        }
+//        if (firstValidThrowaway() >= 9) { // aka there are none on the hotbar, but there are some in main inventory
+//            swapWithHotBar(firstValidThrowaway(), 8);
+//        }
         int pick = bestToolAgainst(Blocks.STONE, PickaxeItem.class);
         if (pick >= 9) {
             swapWithHotBar(pick, 0);

@@ -479,7 +479,7 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
             outer:
             for (BlockState desired : desirableOnHotbar) {
                 for (int i = 0; i < 9; i++) {
-                    if (valid(approxPlaceable.get(i), desired, true)) {
+                    if ((approxPlaceable.get(i) != null) && valid(approxPlaceable.get(i), desired, true)) {
                         usefulSlots.add(i);
                         continue outer;
                     }
@@ -490,7 +490,7 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
             outer:
             for (int i = 9; i < 36; i++) {
                 for (BlockState desired : noValidHotbarOption) {
-                    if (valid(approxPlaceable.get(i), desired, true)) {
+                    if ((approxPlaceable.get(i) != null) && valid(approxPlaceable.get(i), desired, true)) {
                         baritone.getInventoryBehavior().attemptToPutOnHotbar(i, usefulSlots::contains);
                         break outer;
                     }
