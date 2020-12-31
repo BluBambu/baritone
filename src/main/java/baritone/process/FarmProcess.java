@@ -349,7 +349,11 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
                         }
                     }
 
-                    goals.add(new GoalBlock(pos.up()));
+                    if (ctx.world().getBlockState(pos.up().up()).getBlock() != Blocks.AIR) {
+                        goals.add(new BuilderProcess.GoalPlace(pos.up()));
+                    } else {
+                        goals.add(new GoalBlock(pos.up()));
+                    }
                 }
                 break;
             case Plant:
@@ -374,7 +378,7 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
                         }
                     }
 
-                    goals.add(new BuilderProcess.GoalPlace(pos));
+                    goals.add(new BuilderProcess.GoalPlace(pos.up()));
                 }
                 break;
             case Harvest:
@@ -392,7 +396,11 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
                         }
                     }
 
-                    goals.add(new GoalBlock(pos));
+                    if (ctx.world().getBlockState(pos.up()).getBlock() != Blocks.AIR) {
+                        goals.add(new BuilderProcess.GoalPlace(pos));
+                    } else {
+                        goals.add(new GoalBlock(pos));
+                    }
                 }
                 break;
         }
