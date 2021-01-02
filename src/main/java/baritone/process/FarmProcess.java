@@ -68,6 +68,8 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
     private boolean hasToPlant;
     private FarmAction cachedAction = FarmAction.Till;
     private List<BlockPos> cachedBlocks = new ArrayList<>();
+    private BlockPos lastTarget;
+    private int lastTargetTicks;
 
     private static final List<Item> FARMLAND_PLANTABLE = Arrays.asList(
             Items.POTATO
@@ -306,7 +308,7 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
                 cachedBlocks = GetLargestLevel(plantLevels);
             }
 
-            if (((cachedAction == FarmAction.Plant) && cachedBlocks.size() <= 5) ||
+            if (((cachedAction == FarmAction.Plant) && cachedBlocks.size() <= 10) ||
                     (cachedAction == FarmAction.Till && cachedBlocks.isEmpty())) {
                 cachedAction = FarmAction.Harvest;
                 cachedBlocks = GetLargestLevel(breakLevels);
@@ -374,6 +376,19 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
                             if (ctx.isLookingAt(pos)) {
                                 baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_RIGHT, true);
                             }
+
+                            if (lastTarget.equals(pos)) {
+                                lastTargetTicks += 1;
+
+                                if (lastTargetTicks > 1200) {
+                                    cachedBlocks.remove(i);
+                                }
+                            } else {
+                                lastTargetTicks = 0;
+                            }
+
+                            lastTarget = pos;
+
                             return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
                         }
                     }
