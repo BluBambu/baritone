@@ -378,7 +378,7 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
                                 baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_RIGHT, true);
                             }
 
-                            if (lastTarget.equals(pos)) {
+                            if ((lastTarget != null) && lastTarget.equals(pos)) {
                                 lastTargetTicks += 1;
 
                                 if (lastTargetTicks > 1200) {
