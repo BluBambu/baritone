@@ -130,7 +130,8 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
     }
 
     private boolean isEnhancedCrop(ItemStack stack) {
-        return FARMLAND_PLANTABLE.contains(stack.getItem()) && !EnchantmentHelper.getEnchantments(stack).isEmpty();
+        return (FARMLAND_PLANTABLE.contains(stack.getItem()) || stack.getItem() == Items.BAKED_POTATO) &&
+                !EnchantmentHelper.getEnchantments(stack).isEmpty();
     }
 
     private boolean isHoe(ItemStack stack) {
